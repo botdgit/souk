@@ -1,6 +1,5 @@
 require File.join(File.dirname(`node --print "require.resolve('expo/package.json')"`), "scripts/autolinking")
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
-require 'xcodeproj'
 
 require 'json'
 podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
@@ -76,62 +75,5 @@ target 'Souk' do
       end
     end
 
-    # Xcode 16 changed scheduling so that PrecompileSwiftBridgingHeader /
-    # SwiftGeneratePch can start before implicit link dependencies (libPods-Souk.a)
-    # have finished building, causing "module map file not found" errors. Adding an
-    # explicit PBXTargetDependency from Souk → Pods-Souk forces Xcode to fully
-    # complete all pod targets before any Swift compilation phase in Souk starts.
-    #
-    # IMPORTANT: we must use installer.user_project (the same Xcodeproj::Project
-    # object that CocoaPods will save after this hook) — NOT a separately-opened
-    # copy. If we open our own copy and call .save, CocoaPods overwrites it
-    # afterwards with its own save, discarding the target dependency we added.
-    main_project = installer.user_project
-    pods_project  = installer.pods_project
-    pods_aggregate = pods_project.targets.find { |t| t.name == 'Pods-Souk' }
-    souk_target    = main_project&.targets&.find { |t| t.name == 'Souk' }
-
-    if main_project && pods_aggregate && souk_target
-      # Find or create a PBXFileReference for Pods/Pods.xcodeproj in the main
-      # project. container_portal must be the UUID of this object, not a path.
-      pods_proj_ref = main_project.files.find { |f| f.path&.end_with?('Pods.xcodeproj') }
-      unless pods_proj_ref
-        pods_proj_ref = main_project.new(Xcodeproj::Project::Object::PBXFileReference)
-        pods_proj_ref.path = 'Pods/Pods.xcodeproj'
-        pods_proj_ref.name = 'Pods.xcodeproj'
-        pods_proj_ref.source_tree = '<group>'
-        pods_proj_ref.last_known_file_type = 'wrapper.pb-project'
-        main_project.main_group << pods_proj_ref
-      end
-
-      # Remove any stale Pods-Souk dependencies (UUIDs shift on every pod install
-      # because deterministic_uuids => false).
-      souk_target.dependencies.select { |dep|
-        dep.name == 'Pods-Souk' || dep.target_proxy&.remote_info == 'Pods-Souk'
-      }.each { |dep|
-        dep.target_proxy.remove_from_project if dep.target_proxy
-        dep.remove_from_project
-      }
-
-      # Add a fresh explicit dependency with the current Pods-Souk UUID.
-      container_proxy = main_project.new(Xcodeproj::Project::Object::PBXContainerItemProxy)
-      container_proxy.container_portal = pods_proj_ref.uuid
-      container_proxy.proxy_type = '1'
-      container_proxy.remote_global_id_string = pods_aggregate.uuid
-      container_proxy.remote_info = pods_aggregate.name
-
-      dependency = main_project.new(Xcodeproj::Project::Object::PBXTargetDependency)
-      dependency.name = pods_aggregate.name
-      dependency.target_proxy = container_proxy
-
-      souk_target.dependencies << dependency
-      # Do NOT call main_project.save — CocoaPods saves installer.user_project
-      # after all post_install hooks complete; saving here would be redundant and
-      # risks a race with CocoaPods' own save.
-      puts "✅ Added explicit Souk → Pods-Souk target dependency (uuid: #{pods_aggregate.uuid})"
-    else
-      warn "⚠️  Could not add Souk → Pods-Souk target dependency: " \
-           "main_project=#{!main_project.nil?} pods_aggregate=#{!pods_aggregate.nil?} souk_target=#{!souk_target.nil?}"
-    end
   end
 end

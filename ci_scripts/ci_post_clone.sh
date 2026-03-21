@@ -52,4 +52,72 @@ while true; do
   POD_BACKOFF=$((POD_BACKOFF * 2))
 done
 
+echo "=== ci_post_clone: adding Pods-Souk explicit target dependency ==="
+
+# Xcode 16 eagerly schedules PrecompileSwiftBridgingHeader/SwiftGeneratePch
+# before implicit link dependencies (libPods-Souk.a) are fully built. Adding an
+# explicit PBXTargetDependency from Souk → Pods-Souk forces the build system to
+# complete all pod targets before any Swift compilation phase in Souk starts.
+#
+# This runs AFTER pod install so CocoaPods cannot overwrite the change.
+# xcodeproj gem is available because CocoaPods depends on it.
+ruby - "$CI_PRIMARY_REPOSITORY_PATH/apps/mobile/ios" <<'RUBY'
+require 'xcodeproj'
+
+ios_dir     = ARGV[0]
+main_path   = File.join(ios_dir, 'Souk.xcodeproj')
+pods_path   = File.join(ios_dir, 'Pods', 'Pods.xcodeproj')
+
+unless File.exist?(pods_path)
+  warn "⚠️  #{pods_path} not found – skipping target dependency injection"
+  exit 0
+end
+
+main_project  = Xcodeproj::Project.open(main_path)
+pods_project  = Xcodeproj::Project.open(pods_path)
+pods_aggregate = pods_project.targets.find { |t| t.name == 'Pods-Souk' }
+souk_target    = main_project.targets.find { |t| t.name == 'Souk' }
+
+unless pods_aggregate && souk_target
+  warn "⚠️  Pods-Souk or Souk target not found – skipping"
+  exit 0
+end
+
+# Find or create PBXFileReference for Pods/Pods.xcodeproj.
+# container_portal must be this object's UUID (not a path string).
+pods_proj_ref = main_project.files.find { |f| f.path&.end_with?('Pods.xcodeproj') }
+unless pods_proj_ref
+  pods_proj_ref = main_project.new(Xcodeproj::Project::Object::PBXFileReference)
+  pods_proj_ref.path = 'Pods/Pods.xcodeproj'
+  pods_proj_ref.name = 'Pods.xcodeproj'
+  pods_proj_ref.source_tree = '<group>'
+  pods_proj_ref.last_known_file_type = 'wrapper.pb-project'
+  main_project.main_group << pods_proj_ref
+end
+
+# Remove stale dependencies (UUIDs shift on each pod install with
+# deterministic_uuids => false).
+souk_target.dependencies.select { |dep|
+  dep.name == 'Pods-Souk' || dep.target_proxy&.remote_info == 'Pods-Souk'
+}.each { |dep|
+  dep.target_proxy.remove_from_project if dep.target_proxy
+  dep.remove_from_project
+}
+
+container_proxy = main_project.new(Xcodeproj::Project::Object::PBXContainerItemProxy)
+container_proxy.container_portal       = pods_proj_ref.uuid
+container_proxy.proxy_type             = '1'
+container_proxy.remote_global_id_string = pods_aggregate.uuid
+container_proxy.remote_info            = pods_aggregate.name
+
+dependency = main_project.new(Xcodeproj::Project::Object::PBXTargetDependency)
+dependency.name         = pods_aggregate.name
+dependency.target_proxy = container_proxy
+
+souk_target.dependencies << dependency
+main_project.save
+
+puts "✅ Souk → Pods-Souk target dependency added (uuid: #{pods_aggregate.uuid})"
+RUBY
+
 echo "=== ci_post_clone: done ==="
