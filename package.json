@@ -7,12 +7,14 @@
     "apps/mobile"
   ],
   "scripts": {
-    "dev:api": "yarn workspace @souk/api dev",
-    "dev:mobile": "yarn workspace @souk/mobile start",
-    "build:api": "yarn workspace @souk/api build",
-    "test": "yarn workspaces run test",
-    "lint": "yarn workspaces run lint",
-    "typecheck": "yarn workspaces run typecheck"
+    "dev:api": "npm run dev --workspace=@souk/api",
+    "dev:mobile": "npm run start --workspace=@souk/mobile",
+    "ios": "npm run ios --workspace=@souk/mobile",
+    "android": "npm run android --workspace=@souk/mobile",
+    "build:api": "npm run build --workspace=@souk/api",
+    "test": "npm run test --workspaces",
+    "lint": "npm run lint --workspaces",
+    "typecheck": "npm run typecheck --workspaces"
   },
   "devDependencies": {
     "typescript": "^5.4.0"

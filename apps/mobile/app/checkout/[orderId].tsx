@@ -6,15 +6,20 @@ import { Ionicons } from '@expo/vector-icons'
 import { Button } from '@/components/ui/Button'
 
 export default function CheckoutScreen() {
-  const { orderId, clientSecret } = useLocalSearchParams<{
+  const { orderId, clientSecret, success } = useLocalSearchParams<{
     orderId: string
     clientSecret: string
+    success?: string
   }>()
   const { initPaymentSheet, presentPaymentSheet } = useStripe()
   const [loading, setLoading] = useState(true)
   const [ready, setReady] = useState(false)
 
+  const isSuccess = success === 'true'
+
   useEffect(() => {
+    if (isSuccess) { setLoading(false); return }
+
     async function init() {
       const { error } = await initPaymentSheet({
         paymentIntentClientSecret: clientSecret,
@@ -42,7 +47,7 @@ export default function CheckoutScreen() {
     }
 
     init()
-  }, [clientSecret, initPaymentSheet])
+  }, [clientSecret, initPaymentSheet, isSuccess])
 
   async function handlePay() {
     setLoading(true)
@@ -71,8 +76,6 @@ export default function CheckoutScreen() {
       </View>
     )
   }
-
-  const isSuccess = useLocalSearchParams<{ success?: string }>().success === 'true'
 
   if (isSuccess) {
     return (

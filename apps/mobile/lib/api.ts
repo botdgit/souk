@@ -13,6 +13,33 @@ async function getToken(): Promise<string | null> {
   return SecureStore.getItemAsync('access_token')
 }
 
+let isRefreshing = false
+let refreshPromise: Promise<string | null> | null = null
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = await SecureStore.getItemAsync('refresh_token')
+  if (!refreshToken) return null
+
+  const response = await fetch(`${API_URL}/auth/refresh`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken }),
+  })
+
+  if (!response.ok) {
+    await SecureStore.deleteItemAsync('access_token')
+    await SecureStore.deleteItemAsync('refresh_token')
+    return null
+  }
+
+  const data = await response.json()
+  await SecureStore.setItemAsync('access_token', data.accessToken)
+  if (data.refreshToken) {
+    await SecureStore.setItemAsync('refresh_token', data.refreshToken)
+  }
+  return data.accessToken
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -32,6 +59,27 @@ async function request<T>(
     ...options,
     headers,
   })
+
+  // Handle expired access token — attempt refresh once
+  if (response.status === 401 && token) {
+    if (!isRefreshing) {
+      isRefreshing = true
+      refreshPromise = refreshAccessToken().finally(() => { isRefreshing = false })
+    }
+
+    const newToken = await refreshPromise
+    if (newToken) {
+      headers['Authorization'] = `Bearer ${newToken}`
+      const retryResponse = await fetch(`${API_URL}${path}`, { ...options, headers })
+
+      if (!retryResponse.ok) {
+        const body = await retryResponse.json().catch(() => ({}))
+        throw new ApiError(retryResponse.status, body.error || `HTTP ${retryResponse.status}`)
+      }
+      if (retryResponse.status === 204) return undefined as T
+      return retryResponse.json()
+    }
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}))

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import {
   View,
   Text,
@@ -8,30 +8,43 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Linking,
 } from 'react-native'
 import { router } from 'expo-router'
 import { useSendOtp, useVerifyOtp } from '@/features/auth/hooks'
 import { Button } from '@/components/ui/Button'
 
+const PRIVACY_URL = 'https://souk.ae/privacy'
+const TERMS_URL = 'https://souk.ae/terms'
+const RESEND_COOLDOWN_SECONDS = 30
+
 export default function AuthScreen() {
   const [step, setStep] = useState<'phone' | 'otp'>('phone')
   const [phone, setPhone] = useState('+971')
   const [otp, setOtp] = useState('')
+  const [resendCooldown, setResendCooldown] = useState(0)
   const otpRef = useRef<TextInput>(null)
 
   const { mutate: sendOtp, isPending: isSendingOtp } = useSendOtp()
   const { mutate: verifyOtp, isPending: isVerifyingOtp } = useVerifyOtp()
 
-  function handleSendOtp() {
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [resendCooldown])
+
+  const handleSendOtp = useCallback(() => {
     if (phone.length < 12) return Alert.alert('Invalid number', 'Enter a valid UAE mobile number.')
     sendOtp(phone, {
       onSuccess: () => {
         setStep('otp')
+        setResendCooldown(RESEND_COOLDOWN_SECONDS)
         setTimeout(() => otpRef.current?.focus(), 300)
       },
       onError: (err) => Alert.alert('Error', err.message),
     })
-  }
+  }, [phone, sendOtp])
 
   function handleVerifyOtp() {
     if (otp.length !== 6) return Alert.alert('Invalid code', 'Enter the 6-digit code.')
@@ -118,10 +131,12 @@ export default function AuthScreen() {
             <TouchableOpacity
               className="mt-4 items-center"
               onPress={handleSendOtp}
-              disabled={isSendingOtp}
+              disabled={isSendingOtp || resendCooldown > 0}
             >
               {isSendingOtp ? (
                 <ActivityIndicator color="#D4A853" />
+              ) : resendCooldown > 0 ? (
+                <Text className="text-souk-muted">Resend code in {resendCooldown}s</Text>
               ) : (
                 <Text className="text-souk-gold">Resend code</Text>
               )}
@@ -130,7 +145,13 @@ export default function AuthScreen() {
         )}
 
         <Text className="text-souk-muted text-xs text-center mt-12 px-4">
-          By continuing, you agree to Souk's Terms of Service and Privacy Policy.
+          By continuing, you agree to Souk's{' '}
+          <Text className="text-souk-gold underline" onPress={() => Linking.openURL(TERMS_URL)}>
+            Terms of Service
+          </Text>{' '}and{' '}
+          <Text className="text-souk-gold underline" onPress={() => Linking.openURL(PRIVACY_URL)}>
+            Privacy Policy
+          </Text>.
         </Text>
       </View>
     </KeyboardAvoidingView>

@@ -15,10 +15,25 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "ae.souk.app",
+      "buildNumber": "1",
+      "associatedDomains": [
+        "applinks:souk.ae"
+      ],
+      "entitlements": {
+        "aps-environment": "production"
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "Souk needs camera access to photograph items for your listings.",
         "NSPhotoLibraryUsageDescription": "Souk needs photo library access to upload listing images.",
-        "NSFaceIDUsageDescription": "Souk uses Face ID for secure authentication."
+        "NSFaceIDUsageDescription": "Souk uses Face ID for secure authentication.",
+        "UIBackgroundModes": ["remote-notification"],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": []
       }
     },
     "android": {
@@ -27,6 +42,7 @@
         "backgroundColor": "#0F0E0E"
       },
       "package": "ae.souk.app",
+      "versionCode": 1,
       "permissions": [
         "CAMERA",
         "READ_EXTERNAL_STORAGE",
@@ -54,6 +70,13 @@
       [
         "expo-image-picker",
         { "photosPermission": "Souk needs photo access for listing images." }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.ae.souk.app",
+          "enableGooglePay": true
+        }
       ]
     ],
     "experiments": {
