@@ -74,5 +74,45 @@ target 'Souk' do
         config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
       end
     end
+
+    # Add an explicit Xcode target dependency from Souk → Pods-Souk so that
+    # Xcode 16's eager parallel compiler cannot start Souk's compilation phases
+    # (PrecompileSwiftBridgingHeader, SwiftGeneratePch) before all pod targets
+    # have built their module maps.
+    #
+    # CocoaPods normally relies on Xcode's *implicit* dependency detection
+    # (libPods-Souk.a in BUILT_PRODUCTS_DIR) but Xcode 16 changed how early
+    # compilation phases are scheduled relative to implicit deps, causing the
+    # "module map file not found" cascade.  An explicit PBXTargetDependency
+    # is the reliable fix.
+    require 'xcodeproj'
+    main_project_path = File.join(__dir__, 'Souk.xcodeproj')
+    main_project = Xcodeproj::Project.open(main_project_path)
+
+    pods_aggregate = installer.pods_project.targets.find { |t| t.name == 'Pods-Souk' }
+    souk_target   = main_project.targets.find { |t| t.name == 'Souk' }
+
+    if pods_aggregate && souk_target
+      # Only add if not already present (idempotent across repeated pod installs)
+      already_linked = souk_target.dependencies.any? do |dep|
+        dep.target_proxy&.remote_global_id_string == pods_aggregate.uuid
+      end
+
+      unless already_linked
+        container_proxy = main_project.new(Xcodeproj::Project::Object::PBXContainerItemProxy)
+        container_proxy.container_portal = installer.pods_project.path.to_s
+        container_proxy.proxy_type       = '1'
+        container_proxy.remote_global_id_string = pods_aggregate.uuid
+        container_proxy.remote_info      = pods_aggregate.name
+
+        dependency = main_project.new(Xcodeproj::Project::Object::PBXTargetDependency)
+        dependency.name         = pods_aggregate.name
+        dependency.target_proxy = container_proxy
+
+        souk_target.dependencies << dependency
+      end
+    end
+
+    main_project.save
   end
 end
