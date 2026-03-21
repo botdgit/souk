@@ -16,12 +16,6 @@ prepare_react_native_project!
 target 'Souk' do
   use_expo_modules!
 
-  # Stub pod: provides EXBarCodeScannerInterface + EXBarCodeScannerProviderInterface
-  # so that ExpoCamera's CameraViewLegacy.swift compiles when expo-barcode-scanner
-  # is not installed. The runtime legacyModule lookup returns nil — no actual
-  # barcode scanning is wired up through this stub.
-  pod 'EXBarCodeScanner', :path => './EXBarCodeScannerStubs'
-
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
   else
@@ -78,6 +72,34 @@ target 'Souk' do
       target.build_configurations.each do |config|
         config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'NO'
         config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      end
+    end
+
+    # expo-camera@15.x (SDK 51 era) references EXBarCodeScannerInterface and
+    # EXBarCodeScannerProviderInterface in CameraViewLegacy.swift. These types
+    # live in expo-barcode-scanner, which is not installed in this project.
+    # ExpoCamera uses DEFINES_MODULE=YES (static framework), so Swift only sees
+    # ObjC types that are part of its own generated umbrella header — adding the
+    # stub to HEADER_SEARCH_PATHS alone is not enough.
+    # Fix: copy stub header declarations into the same directory as ExpoCamera's
+    # generated umbrella header, then append imports to the umbrella so the types
+    # become part of ExpoCamera's own module.
+    require 'fileutils'
+    stub_dir = File.expand_path(File.join(__dir__, 'EXBarCodeScannerStubs'))
+    umbrella_glob = File.join(installer.sandbox.root, '**', 'ExpoCamera-umbrella.h')
+    Dir.glob(umbrella_glob).each do |umbrella_path|
+      umbrella_dir = File.dirname(umbrella_path)
+      %w[EXBarCodeScannerInterface.h EXBarCodeScannerProviderInterface.h].each do |hdr|
+        FileUtils.cp(File.join(stub_dir, hdr), File.join(umbrella_dir, hdr))
+      end
+      content = File.read(umbrella_path)
+      unless content.include?('EXBarCodeScannerInterface')
+        File.open(umbrella_path, 'a') do |f|
+          f.puts ''
+          f.puts '// EXBarCodeScanner stub types for expo-camera@15 legacy API'
+          f.puts '#import "EXBarCodeScannerInterface.h"'
+          f.puts '#import "EXBarCodeScannerProviderInterface.h"'
+        end
       end
     end
 
