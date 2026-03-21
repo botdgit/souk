@@ -197,7 +197,7 @@ router.post('/payout', requireAuth, async (req: AuthRequest, res: Response) => {
       { stripeAccount: user.stripe_account_id }
     )
 
-    await supabase.from('transactions').insert({
+    const { error: txnErr } = await supabase.from('transactions').insert({
       user_id: req.userId,
       type: 'payout',
       amount_aed: -amount,
@@ -205,6 +205,7 @@ router.post('/payout', requireAuth, async (req: AuthRequest, res: Response) => {
       status: 'pending',
       description: 'Payout to bank account',
     })
+    if (txnErr) console.error('Failed to record payout transaction:', txnErr)
 
     return res.json({ payout: { id: payout.id, amount, status: payout.status } })
   } catch (err) {
@@ -289,14 +290,15 @@ webhookRouter.post('/webhook', async (req: Request, res: Response) => {
     return res.json({ received: true, duplicate: true })
   }
 
-  await supabase.from('processed_events').insert({ event_id: event.id, type: event.type })
-
   try {
     await handleStripeEvent(event)
   } catch (err) {
     console.error(`Error handling event ${event.type}:`, err)
     return res.status(500).json({ error: 'Event handling failed' })
   }
+
+  // Mark as processed AFTER successful handling so failed events can be retried
+  await supabase.from('processed_events').insert({ event_id: event.id, type: event.type })
 
   return res.json({ received: true })
 })
@@ -314,12 +316,13 @@ async function handleStripeEvent(event: Stripe.Event) {
         break
       }
 
-      await supabase
+      const { error: orderErr } = await supabase
         .from('orders')
         .update({ status: 'paid' })
         .eq('stripe_payment_intent_id', pi.id)
+      if (orderErr) console.error('Failed to update order to paid:', orderErr)
 
-      await supabase.from('notifications').insert([
+      const { error: notifErr } = await supabase.from('notifications').insert([
         {
           user_id: sellerId,
           type: 'sale_confirmed',
@@ -335,24 +338,27 @@ async function handleStripeEvent(event: Stripe.Event) {
           data: { listingId },
         },
       ])
+      if (notifErr) console.error('Failed to insert payment notifications:', notifErr)
       break
     }
 
     case 'payment_intent.payment_failed': {
       const pi = event.data.object as Stripe.PaymentIntent
 
-      await supabase
+      const { error: cancelErr } = await supabase
         .from('orders')
         .update({ status: 'cancelled' })
         .eq('stripe_payment_intent_id', pi.id)
+      if (cancelErr) console.error('Failed to cancel order:', cancelErr)
 
       // Reactivate listing
       const listingId = pi.metadata?.listingId
       if (listingId) {
-        await supabase
+        const { error: reactivateErr } = await supabase
           .from('listings')
           .update({ status: 'active' })
           .eq('id', listingId)
+        if (reactivateErr) console.error('Failed to reactivate listing:', reactivateErr)
       }
 
       const buyerId = pi.metadata?.buyerId
@@ -374,7 +380,7 @@ async function handleStripeEvent(event: Stripe.Event) {
         (account.requirements?.currently_due?.length ?? 0) === 0 &&
         account.payouts_enabled
 
-      await supabase
+      const { error: accountErr } = await supabase
         .from('users')
         .update({
           stripe_onboarding_complete: isComplete,
@@ -382,6 +388,7 @@ async function handleStripeEvent(event: Stripe.Event) {
           is_verified: account.individual?.verification?.status === 'verified',
         })
         .eq('stripe_account_id', account.id)
+      if (accountErr) console.error('Failed to update user Stripe status:', accountErr)
       break
     }
 
@@ -389,20 +396,22 @@ async function handleStripeEvent(event: Stripe.Event) {
       const transfer = event.data.object as Stripe.Transfer
       const orderId = transfer.metadata?.orderId
       if (orderId) {
-        await supabase
+        const { error: transferErr } = await supabase
           .from('orders')
           .update({ stripe_transfer_id: transfer.id })
           .eq('id', orderId)
+        if (transferErr) console.error('Failed to record transfer on order:', transferErr)
       }
       break
     }
 
     case 'payout.paid': {
       const payout = event.data.object as Stripe.Payout
-      await supabase
+      const { error: payoutErr } = await supabase
         .from('transactions')
         .update({ status: 'completed' })
         .eq('stripe_reference', payout.id)
+      if (payoutErr) console.error('Failed to mark payout transaction completed:', payoutErr)
 
       const { data: txn } = await supabase
         .from('transactions')
@@ -424,10 +433,11 @@ async function handleStripeEvent(event: Stripe.Event) {
 
     case 'payout.failed': {
       const payout = event.data.object as Stripe.Payout
-      await supabase
+      const { error: failErr } = await supabase
         .from('transactions')
         .update({ status: 'failed' })
         .eq('stripe_reference', payout.id)
+      if (failErr) console.error('Failed to mark payout transaction failed:', failErr)
       break
     }
 
@@ -446,10 +456,11 @@ async function handleStripeEvent(event: Stripe.Event) {
         .single()
 
       if (order) {
-        await supabase
+        const { error: disputeErr } = await supabase
           .from('orders')
           .update({ status: 'disputed' })
           .eq('stripe_payment_intent_id', paymentIntentId)
+        if (disputeErr) console.error('Failed to mark order as disputed:', disputeErr)
 
         await supabase.from('notifications').insert([
           {

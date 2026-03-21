@@ -100,12 +100,14 @@ router.post('/:id/follow', requireAuth, async (req: AuthRequest, res: Response) 
     .single()
 
   if (existing) {
-    await supabase.from('follows').delete().eq('id', existing.id)
+    const { error: delError } = await supabase.from('follows').delete().eq('id', existing.id)
+    if (delError) return res.status(500).json({ error: 'Failed to unfollow' })
     await supabase.rpc('decrement_followers', { user_id: followingId })
     return res.json({ following: false })
   }
 
-  await supabase.from('follows').insert({ follower_id: req.userId, following_id: followingId })
+  const { error: insertError } = await supabase.from('follows').insert({ follower_id: req.userId, following_id: followingId })
+  if (insertError) return res.status(500).json({ error: 'Failed to follow' })
   await supabase.rpc('increment_followers', { user_id: followingId })
 
   return res.json({ following: true })

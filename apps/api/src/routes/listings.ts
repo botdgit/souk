@@ -39,10 +39,27 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
     if (q) {
       const filters: string[] = ['status = "active"']
-      if (category) filters.push(`category = "${category}"`)
-      if (area) filters.push(`area = "${area}"`)
-      if (condition) filters.push(`condition = "${condition}"`)
-      if (size) filters.push(`size = "${size}"`)
+      if (category) {
+        if (!CATEGORIES.includes(String(category) as typeof CATEGORIES[number])) {
+          return res.status(400).json({ error: 'Invalid category' })
+        }
+        filters.push(`category = "${category}"`)
+      }
+      if (area) {
+        // Sanitize area: allow only alphanumeric, spaces, hyphens
+        const sanitizedArea = String(area).replace(/[^a-zA-Z0-9 \-]/g, '')
+        filters.push(`area = "${sanitizedArea}"`)
+      }
+      if (condition) {
+        if (!CONDITIONS.includes(String(condition) as typeof CONDITIONS[number])) {
+          return res.status(400).json({ error: 'Invalid condition' })
+        }
+        filters.push(`condition = "${condition}"`)
+      }
+      if (size) {
+        const sanitizedSize = String(size).replace(/[^a-zA-Z0-9 \-/]/g, '')
+        filters.push(`size = "${sanitizedSize}"`)
+      }
       if (minPrice || maxPrice) {
         const min = minPrice ? parseInt(String(minPrice), 10) : 0
         const max = maxPrice ? parseInt(String(maxPrice), 10) : 99999999
@@ -127,11 +144,13 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
   // Check listing velocity (max 5 per hour)
   const oneHourAgo = new Date(Date.now() - 3600000).toISOString()
-  const { count } = await supabase
+  const { count, error: countError } = await supabase
     .from('listings')
     .select('id', { count: 'exact', head: true })
     .eq('seller_id', req.userId)
     .gte('created_at', oneHourAgo)
+
+  if (countError) return res.status(500).json({ error: 'Failed to check listing velocity' })
 
   if ((count ?? 0) >= 5) {
     return res.status(429).json({ error: 'Maximum 5 listings per hour' })
@@ -197,7 +216,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     return res.status(403).json({ error: 'Forbidden' })
   }
 
-  const allowed = ['title', 'description', 'price_aed', 'open_to_offers', 'open_to_swaps', 'area', 'images', 'status']
+  const allowed = ['title', 'description', 'price_aed', 'open_to_offers', 'open_to_swaps', 'area', 'images']
   const updates: Record<string, unknown> = {}
   for (const key of allowed) {
     if (req.body[key] !== undefined) updates[key] = req.body[key]
@@ -235,7 +254,9 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: 'Cannot delete a sold listing' })
   }
 
-  await supabase.from('listings').update({ status: 'archived' }).eq('id', id)
+  const { error: archiveError } = await supabase.from('listings').update({ status: 'archived' }).eq('id', id)
+  if (archiveError) return res.status(500).json({ error: 'Failed to archive listing' })
+
   await removeListing(id).catch(console.error)
 
   return res.status(204).send()
@@ -253,11 +274,13 @@ router.post('/:id/save', requireAuth, async (req: AuthRequest, res: Response) =>
     .single()
 
   if (existing) {
-    await supabase.from('saved_items').delete().eq('id', existing.id)
+    const { error: delError } = await supabase.from('saved_items').delete().eq('id', existing.id)
+    if (delError) return res.status(500).json({ error: 'Failed to unsave listing' })
     return res.json({ saved: false })
   }
 
-  await supabase.from('saved_items').insert({ user_id: req.userId, listing_id: id })
+  const { error: saveError } = await supabase.from('saved_items').insert({ user_id: req.userId, listing_id: id })
+  if (saveError) return res.status(500).json({ error: 'Failed to save listing' })
   return res.json({ saved: true })
 })
 

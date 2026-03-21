@@ -58,4 +58,29 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
   })
 })
 
+// POST /auth/refresh
+const refreshSchema = z.object({
+  refreshToken: z.string().min(1),
+})
+
+router.post('/refresh', async (req: Request, res: Response) => {
+  const parsed = refreshSchema.safeParse(req.body)
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() })
+  }
+
+  const { data, error } = await supabase.auth.refreshSession({
+    refresh_token: parsed.data.refreshToken,
+  })
+
+  if (error || !data.session) {
+    return res.status(401).json({ error: error?.message || 'Failed to refresh token' })
+  }
+
+  return res.json({
+    accessToken: data.session.access_token,
+    refreshToken: data.session.refresh_token,
+  })
+})
+
 export default router

@@ -62,7 +62,8 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 
   // Mark listing as reserved
-  await supabase.from('listings').update({ status: 'reserved' }).eq('id', listingId)
+  const { error: reserveErr } = await supabase.from('listings').update({ status: 'reserved' }).eq('id', listingId)
+  if (reserveErr) console.error('Failed to reserve listing:', reserveErr)
 
   // Create order record
   const { data: order, error } = await supabase
@@ -84,7 +85,15 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     .single()
 
   if (error) {
-    console.error(error)
+    console.error('Failed to create order record:', error)
+    // Cancel the PaymentIntent since DB insert failed
+    try {
+      await stripe.paymentIntents.cancel(paymentIntent.id)
+    } catch (cancelErr) {
+      console.error('Failed to cancel PaymentIntent after DB error:', cancelErr)
+    }
+    // Revert listing status
+    await supabase.from('listings').update({ status: 'active' }).eq('id', listingId)
     return res.status(500).json({ error: 'Failed to create order' })
   }
 
@@ -129,18 +138,24 @@ router.post('/:id/confirm-delivery', requireAuth, async (req: AuthRequest, res: 
 
   const now = new Date().toISOString()
 
-  await supabase.from('orders').update({
+  const { error: orderUpdateErr } = await supabase.from('orders').update({
     status: 'completed',
     stripe_transfer_id: transfer.id,
     delivery_confirmed_at: now,
     payout_released_at: now,
   }).eq('id', order.id)
 
+  if (orderUpdateErr) {
+    console.error('Failed to update order status:', orderUpdateErr)
+    return res.status(500).json({ error: 'Failed to update order' })
+  }
+
   // Update listing to sold
-  await supabase.from('listings').update({ status: 'sold' }).eq('id', order.listing_id)
+  const { error: listingErr } = await supabase.from('listings').update({ status: 'sold' }).eq('id', order.listing_id)
+  if (listingErr) console.error('Failed to mark listing as sold:', listingErr)
 
   // Create transaction records
-  await supabase.from('transactions').insert([
+  const { error: txnErr } = await supabase.from('transactions').insert([
     {
       user_id: order.seller_id,
       order_id: order.id,
@@ -160,6 +175,7 @@ router.post('/:id/confirm-delivery', requireAuth, async (req: AuthRequest, res: 
       description: `Purchase completed`,
     },
   ])
+  if (txnErr) console.error('Failed to create transaction records:', txnErr)
 
   return res.json({ message: 'Delivery confirmed and payment released to seller' })
 })

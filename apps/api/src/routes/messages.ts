@@ -52,17 +52,19 @@ router.get('/:id/messages', requireAuth, async (req: AuthRequest, res: Response)
 
   if (error) return res.status(500).json({ error: 'Failed to fetch messages' })
 
-  // Mark messages as read
+  // Mark messages as read (best-effort, don't fail the request)
   await supabase
     .from('messages')
     .update({ read_at: new Date().toISOString() })
     .eq('conversation_id', id)
     .neq('sender_id', req.userId)
     .is('read_at', null)
+    .then(({ error: readErr }) => { if (readErr) console.error('Failed to mark messages read:', readErr) })
 
   // Reset unread count for current user
   const unreadField = convo.buyer_id === req.userId ? 'unread_count_buyer' : 'unread_count_seller'
   await supabase.from('conversations').update({ [unreadField]: 0 }).eq('id', id)
+    .then(({ error: unreadErr }) => { if (unreadErr) console.error('Failed to reset unread count:', unreadErr) })
 
   return res.json({ messages: data?.reverse(), total: count, page: pageNum })
 })
@@ -108,10 +110,12 @@ router.post('/:id/messages', requireAuth, async (req: AuthRequest, res: Response
   const unreadField = convo.buyer_id === recipientId ? 'unread_count_buyer' : 'unread_count_seller'
 
   await supabase.rpc('increment_unread', { conversation_id: id, field: unreadField })
+    .then(({ error: unreadErr }) => { if (unreadErr) console.error('Failed to increment unread:', unreadErr) })
   await supabase
     .from('conversations')
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', id)
+    .then(({ error: updateErr }) => { if (updateErr) console.error('Failed to update last_message_at:', updateErr) })
 
   return res.status(201).json({ message })
 })

@@ -13,6 +13,7 @@ import messagesRouter from './routes/messages'
 import usersRouter from './routes/users'
 import mediaRouter from './routes/media'
 import notificationsRouter from './routes/notifications'
+import meetupPointsRouter from './routes/meetupPoints'
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -57,6 +58,7 @@ app.use('/api/v1/conversations', messagesRouter)
 app.use('/api/v1/users', usersRouter)
 app.use('/api/v1/media', mediaRouter)
 app.use('/api/v1/notifications', notificationsRouter)
+app.use('/api/v1/meetup-points', meetupPointsRouter)
 
 // Health check
 app.get('/health', (_req, res) => {

@@ -1,8 +1,21 @@
 import { MeiliSearch } from 'meilisearch'
 
+function getMeiliConfig() {
+  const host = process.env.MEILISEARCH_HOST
+  const apiKey = process.env.MEILISEARCH_API_KEY
+
+  if (!host) {
+    console.warn('MEILISEARCH_HOST not set, using localhost fallback')
+  }
+
+  return { host: host || 'http://localhost:7700', apiKey }
+}
+
+const config = getMeiliConfig()
+
 export const meili = new MeiliSearch({
-  host: process.env.MEILISEARCH_HOST || 'http://localhost:7700',
-  apiKey: process.env.MEILISEARCH_API_KEY,
+  host: config.host,
+  apiKey: config.apiKey,
 })
 
 export const LISTINGS_INDEX = 'listings'
