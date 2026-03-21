@@ -16,6 +16,12 @@ prepare_react_native_project!
 target 'Souk' do
   use_expo_modules!
 
+  # Stub pod: provides EXBarCodeScannerInterface + EXBarCodeScannerProviderInterface
+  # so that ExpoCamera's CameraViewLegacy.swift compiles when expo-barcode-scanner
+  # is not installed. The runtime legacyModule lookup returns nil — no actual
+  # barcode scanning is wired up through this stub.
+  pod 'EXBarCodeScanner', :path => './EXBarCodeScannerStubs'
+
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
   else
