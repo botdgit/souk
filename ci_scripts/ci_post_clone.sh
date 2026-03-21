@@ -33,6 +33,23 @@ yarn install --frozen-lockfile
 echo "=== ci_post_clone: running pod install ==="
 
 cd "$CI_PRIMARY_REPOSITORY_PATH/apps/mobile/ios"
-pod install
+
+# Retry pod install up to 4 times with exponential backoff to handle transient
+# network errors when CocoaPods fetches remote git dependencies.
+POD_ATTEMPT=1
+POD_BACKOFF=2
+while true; do
+  if pod install; then
+    break
+  fi
+  if [ "$POD_ATTEMPT" -ge 4 ]; then
+    echo "pod install failed after $POD_ATTEMPT attempts" >&2
+    exit 1
+  fi
+  echo "pod install failed (attempt $POD_ATTEMPT) – retrying in ${POD_BACKOFF}s..."
+  sleep "$POD_BACKOFF"
+  POD_ATTEMPT=$((POD_ATTEMPT + 1))
+  POD_BACKOFF=$((POD_BACKOFF * 2))
+done
 
 echo "=== ci_post_clone: done ==="
