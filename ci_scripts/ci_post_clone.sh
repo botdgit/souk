@@ -23,6 +23,14 @@ fi
 
 echo "yarn: $(yarn --version)"
 
+# Write .xcode.env.local with the absolute node path so that Xcode script
+# phases (e.g. "Bundle React Native code and images") can find node even when
+# Xcode Cloud does not inherit the Homebrew PATH during PhaseScriptExecution.
+NODE_ABS="$(command -v node)"
+XCODE_ENV_LOCAL="$CI_PRIMARY_REPOSITORY_PATH/apps/mobile/ios/.xcode.env.local"
+echo "export NODE_BINARY=${NODE_ABS}" > "$XCODE_ENV_LOCAL"
+echo "Wrote .xcode.env.local: NODE_BINARY=${NODE_ABS}"
+
 echo "=== ci_post_clone: installing JS dependencies ==="
 
 # Xcode Cloud checks out into CI_PRIMARY_REPOSITORY_PATH.
