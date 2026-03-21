@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery, InfiniteData } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import { api } from '@/lib/api'
 import { supabase } from '@/lib/supabase'
@@ -71,7 +71,7 @@ export function useMessages(conversationId: string) {
         (payload) => {
           queryClient.setQueryData(
             ['messages', conversationId],
-            (old: ReturnType<typeof query.data>) => {
+            (old: InfiniteData<{ messages: Message[]; total: number }> | undefined) => {
               if (!old) return old
               const firstPage = old.pages[0]
               return {
