@@ -306,6 +306,7 @@
 					"-ObjC",
 					"-lc++",
 				);
+				PODS_BUILD_DIR = $(SYMROOT);
 				PRODUCT_BUNDLE_IDENTIFIER = "ae.souk.app";
 				PRODUCT_NAME = "Souk";
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
@@ -334,6 +335,7 @@
 					"-ObjC",
 					"-lc++",
 				);
+				PODS_BUILD_DIR = $(SYMROOT);
 				PRODUCT_BUNDLE_IDENTIFIER = "ae.souk.app";
 				PRODUCT_NAME = "Souk";
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
