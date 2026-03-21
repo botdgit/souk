@@ -14,10 +14,12 @@ export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin
 # errors. Pre-building into the archive SYMROOT ensures all .modulemap files
 # already exist when the archive's compilation starts.
 #
-# WHY WORKSPACE (not Pods.xcodeproj directly): React Native / Expo pods
-# (Codegen, Hermes, etc.) require the full workspace context — cross-project
-# header search paths and xcconfigs that are not available when building
-# Pods.xcodeproj in isolation — so the direct-project build fails (code 65).
+# WHY ROOT PROJECT: Xcode Cloud archives using souk.xcodeproj at the repo
+# root. Pre-building with the same project ensures the incremental build
+# cache (OBJROOT) is reused by the archive step, avoiding recompilation.
+# The root project's embedded workspace (contents.xcworkspacedata) includes
+# Pods/Pods.xcodeproj (via the symlink created in ci_post_clone.sh), giving
+# it the same full context as the ios/Souk.xcworkspace had before.
 #
 # NON-FATAL: if Souk's own compilation fails during this pre-build (the same
 # Xcode 16 scheduling issue can also affect regular builds), pod targets will
@@ -31,11 +33,12 @@ if [ -z "${CI_DERIVED_DATA_PATH}" ]; then
 fi
 
 SCHEME="${CI_SCHEME:-souk}"
-IOS_DIR="${CI_PRIMARY_REPOSITORY_PATH}/apps/mobile/ios"
-WORKSPACE="${IOS_DIR}/Souk.xcworkspace"
+# Use the root project (same one Xcode Cloud archives from) so that the
+# pre-build's incremental cache is reused during the archive step.
+PROJECT="${CI_PRIMARY_REPOSITORY_PATH}/souk.xcodeproj"
 
-if [ ! -d "${WORKSPACE}" ]; then
-  echo "=== ci_pre_xcodebuild: ${WORKSPACE} not found – skipping ==="
+if [ ! -d "${PROJECT}" ]; then
+  echo "=== ci_pre_xcodebuild: ${PROJECT} not found – skipping ==="
   exit 0
 fi
 
@@ -45,13 +48,13 @@ ARCHIVE_SYMROOT="${CI_DERIVED_DATA_PATH}/Build/Intermediates.noindex/ArchiveInte
 ARCHIVE_OBJROOT="${CI_DERIVED_DATA_PATH}/Build/Intermediates.noindex/ArchiveIntermediates/${SCHEME}/IntermediateBuildFilesPath"
 
 echo "=== ci_pre_xcodebuild: pre-building pod targets ==="
-echo "  Workspace : ${WORKSPACE}"
-echo "  Scheme    : ${SCHEME}"
-echo "  SYMROOT   : ${ARCHIVE_SYMROOT}"
-echo "  OBJROOT   : ${ARCHIVE_OBJROOT}"
+echo "  Project : ${PROJECT}"
+echo "  Scheme  : ${SCHEME}"
+echo "  SYMROOT : ${ARCHIVE_SYMROOT}"
+echo "  OBJROOT : ${ARCHIVE_OBJROOT}"
 
 xcodebuild build \
-  -workspace "${WORKSPACE}" \
+  -project "${PROJECT}" \
   -scheme "${SCHEME}" \
   -configuration Release \
   -destination "generic/platform=iOS" \

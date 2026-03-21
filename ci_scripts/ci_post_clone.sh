@@ -60,4 +60,23 @@ while true; do
   POD_BACKOFF=$((POD_BACKOFF * 2))
 done
 
+# ---------------------------------------------------------------------------
+# The Xcode Cloud workflow uses souk.xcodeproj at the repo root for the
+# archive build. That project's file references resolve relative to the
+# repo root, so it expects:
+#   $REPO_ROOT/Pods/                 (CocoaPods xcconfigs, frameworks)
+#   $REPO_ROOT/Souk/                 (app source files)
+#
+# Pod install ran inside apps/mobile/ios/, so we create symlinks that make
+# these paths available at the repo root without duplicating any files.
+# ---------------------------------------------------------------------------
+echo "=== ci_post_clone: creating root-level symlinks for souk.xcodeproj ==="
+REPO_ROOT="$CI_PRIMARY_REPOSITORY_PATH"
+IOS_DIR="$REPO_ROOT/apps/mobile/ios"
+
+ln -sfn "$IOS_DIR/Pods"  "$REPO_ROOT/Pods"
+ln -sfn "$IOS_DIR/Souk"  "$REPO_ROOT/Souk"
+echo "  Pods  -> $IOS_DIR/Pods"
+echo "  Souk  -> $IOS_DIR/Souk"
+
 echo "=== ci_post_clone: done ==="
