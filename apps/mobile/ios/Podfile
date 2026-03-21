@@ -75,5 +75,53 @@ target 'Souk' do
       end
     end
 
+    # Xcode 16 regression: PrecompileSwiftBridgingHeader and SwiftGeneratePch are
+    # scheduled eagerly (before pod module maps exist). Setting
+    # SWIFT_PRECOMPILE_BRIDGING_HEADER=NO removes those early tasks entirely;
+    # the bridging header is compiled inline during each Swift compilation unit,
+    # which IS properly ordered after pod targets complete.
+    # Also inject an explicit PBXTargetDependency (Souk -> Pods-Souk) so the
+    # Xcode 16 scheduler cannot start any Souk task before all pods are built.
+    begin
+      installer.aggregate_targets.each do |agg_target|
+        next unless agg_target.name == 'Pods-Souk'
+
+        user_proj = agg_target.user_project
+        souk_native = user_proj.native_targets.find { |t| t.name == 'Souk' }
+        pods_souk_native = installer.pods_project.targets.find { |t| t.name == 'Pods-Souk' }
+        next unless souk_native && pods_souk_native
+
+        # Belt-and-suspenders: also set via xcodeproj in case pbxproj is regenerated
+        souk_native.build_configurations.each do |bc|
+          bc.build_settings['SWIFT_PRECOMPILE_BRIDGING_HEADER'] = 'NO'
+        end
+
+        # Skip if explicit dependency already present
+        next if souk_native.dependencies.any? { |d| d.target_proxy&.remote_info == 'Pods-Souk' }
+
+        # Add a PBXFileReference for Pods/Pods.xcodeproj if not already there
+        pods_proj_ref = user_proj.files.find { |f| f.path&.end_with?('Pods.xcodeproj') }
+        unless pods_proj_ref
+          pods_proj_ref = user_proj.new_file('Pods/Pods.xcodeproj')
+          pods_proj_ref.last_known_file_type = 'wrapper.pb-project'
+          pods_proj_ref.name = 'Pods.xcodeproj'
+        end
+
+        proxy = user_proj.new(Xcodeproj::Project::Object::PBXContainerItemProxy)
+        proxy.container_portal = pods_proj_ref.uuid
+        proxy.proxy_type = '1'
+        proxy.remote_global_id_string = pods_souk_native.uuid
+        proxy.remote_info = pods_souk_native.name
+
+        dep = user_proj.new(Xcodeproj::Project::Object::PBXTargetDependency)
+        dep.name = pods_souk_native.name
+        dep.target_proxy = proxy
+
+        souk_native.dependencies << dep
+      end
+    rescue => e
+      puts "Warning: could not inject Pods-Souk target dependency: #{e.message}"
+    end
+
   end
 end
