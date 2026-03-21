@@ -45,7 +45,12 @@ echo "  Pods project : ${PODS_PROJECT}"
 echo "  SYMROOT      : ${ARCHIVE_SYMROOT}"
 echo "  OBJROOT      : ${ARCHIVE_OBJROOT}"
 
-# Build Pods-Souk (a static-library aggregate that depends on every individual
+# Print available targets so the exact name is visible in CI logs if the build
+# fails due to a target-name mismatch.
+echo "  Available targets in Pods.xcodeproj:"
+xcodebuild -project "${PODS_PROJECT}" -list 2>&1 | grep -A 50 'Targets:' | head -20 || true
+
+# Build Pods-Souk (a static-library target that depends on every individual
 # pod target). All pod targets build as a side-effect, writing their .modulemap
 # files to ARCHIVE_SYMROOT/Release-iphoneos/<PodName>/<PodName>.modulemap.
 # Code signing is disabled because static pod libraries don't need to be signed.
