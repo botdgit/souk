@@ -79,27 +79,42 @@ target 'Souk' do
     # EXBarCodeScannerProviderInterface in CameraViewLegacy.swift. These types
     # live in expo-barcode-scanner, which is not installed in this project.
     # ExpoCamera uses DEFINES_MODULE=YES (static framework), so Swift only sees
-    # ObjC types that are part of its own generated umbrella header — adding the
-    # stub to HEADER_SEARCH_PATHS alone is not enough.
-    # Fix: copy stub header declarations into the same directory as ExpoCamera's
-    # generated umbrella header, then append imports to the umbrella so the types
-    # become part of ExpoCamera's own module.
+    # ObjC types that are part of its own generated umbrella header.
+    # Fix: embed the protocol declarations directly in the umbrella header so
+    # there is no #import file lookup (a relative #import fails because clang
+    # processes the umbrella from a context where the file's directory is not
+    # the current search root).
     require 'fileutils'
-    stub_dir = File.expand_path(File.join(__dir__, 'EXBarCodeScannerStubs'))
+    umbrella_patch = <<~'OBJC'
+
+      // EXBarCodeScanner stub types — expo-barcode-scanner is not installed;
+      // these stubs allow expo-camera@15 CameraViewLegacy.swift to compile.
+      // At runtime, legacyModule(implementing:) returns nil gracefully.
+      #ifdef __OBJC__
+      #import <AVFoundation/AVFoundation.h>
+
+      @protocol EXBarCodeScannerInterface <NSObject>
+      - (void)setSession:(AVCaptureSession *)session;
+      - (void)setSessionQueue:(dispatch_queue_t)sessionQueue;
+      - (void)setOnBarCodeScanned:(void (^)(NSDictionary *body))block;
+      - (void)setIsEnabled:(BOOL)isEnabled;
+      - (void)setPreviewLayer:(AVCaptureVideoPreviewLayer *)previewLayer;
+      - (void)setSettings:(NSDictionary *)settings;
+      - (void)maybeStartBarCodeScanning;
+      - (void)stopBarCodeScanning;
+      @end
+
+      @protocol EXBarCodeScannerProviderInterface <NSObject>
+      - (id<EXBarCodeScannerInterface>)createBarCodeScanner;
+      @end
+      #endif
+    OBJC
     umbrella_glob = File.join(installer.sandbox.root, '**', 'ExpoCamera-umbrella.h')
     Dir.glob(umbrella_glob).each do |umbrella_path|
-      umbrella_dir = File.dirname(umbrella_path)
-      %w[EXBarCodeScannerInterface.h EXBarCodeScannerProviderInterface.h].each do |hdr|
-        FileUtils.cp(File.join(stub_dir, hdr), File.join(umbrella_dir, hdr))
-      end
       content = File.read(umbrella_path)
       unless content.include?('EXBarCodeScannerInterface')
-        File.open(umbrella_path, 'a') do |f|
-          f.puts ''
-          f.puts '// EXBarCodeScanner stub types for expo-camera@15 legacy API'
-          f.puts '#import "EXBarCodeScannerInterface.h"'
-          f.puts '#import "EXBarCodeScannerProviderInterface.h"'
-        end
+        File.open(umbrella_path, 'a') { |f| f.write(umbrella_patch) }
+        puts "Patched #{umbrella_path} with EXBarCodeScanner stubs"
       end
     end
 
