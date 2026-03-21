@@ -23,13 +23,24 @@ fi
 
 echo "yarn: $(yarn --version)"
 
-# Write .xcode.env.local with the absolute node path so that Xcode script
-# phases (e.g. "Bundle React Native code and images") can find node even when
-# Xcode Cloud does not inherit the Homebrew PATH during PhaseScriptExecution.
+# Write .xcode.env.local so that Xcode script phases can find node and the
+# correct project root even when Xcode Cloud does not inherit Homebrew PATH.
+#
+# NODE_BINARY: needed by "Bundle React Native code and images" and
+#   with-node.sh because Xcode's script-phase PATH omits Homebrew.
+#
+# PROJECT_ROOT: souk.xcodeproj is a symlink at the repo root, so Xcode
+#   sets PROJECT_DIR to the repo root and the script computes
+#   PROJECT_ROOT="$PROJECT_DIR/.." (parent of repo – wrong).
+#   The bundle script sources .xcode.env.local a SECOND TIME after
+#   setting PROJECT_ROOT, so we can override it here.
 NODE_ABS="$(command -v node)"
 XCODE_ENV_LOCAL="$CI_PRIMARY_REPOSITORY_PATH/apps/mobile/ios/.xcode.env.local"
-echo "export NODE_BINARY=${NODE_ABS}" > "$XCODE_ENV_LOCAL"
-echo "Wrote .xcode.env.local: NODE_BINARY=${NODE_ABS}"
+{
+  echo "export NODE_BINARY=${NODE_ABS}"
+  echo "export PROJECT_ROOT=${CI_PRIMARY_REPOSITORY_PATH}/apps/mobile"
+} > "$XCODE_ENV_LOCAL"
+echo "Wrote .xcode.env.local: NODE_BINARY=${NODE_ABS}, PROJECT_ROOT=${CI_PRIMARY_REPOSITORY_PATH}/apps/mobile"
 
 echo "=== ci_post_clone: installing JS dependencies ==="
 
