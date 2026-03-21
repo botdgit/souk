@@ -15,17 +15,20 @@ fi
 echo "Node: $(node --version)"
 echo "npm:  $(npm --version)"
 
+# The repo uses yarn.lock; install yarn if not already present.
+if ! command -v yarn >/dev/null 2>&1; then
+  echo "yarn not found – installing via npm"
+  npm install -g yarn
+fi
+
+echo "yarn: $(yarn --version)"
+
 echo "=== ci_post_clone: installing JS dependencies ==="
 
 # Xcode Cloud checks out into CI_PRIMARY_REPOSITORY_PATH.
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 
-# Prefer yarn if available (enables workspace-aware installs); fall back to npm.
-if command -v yarn >/dev/null 2>&1; then
-  yarn install --frozen-lockfile
-else
-  npm ci
-fi
+yarn install --frozen-lockfile
 
 echo "=== ci_post_clone: running pod install ==="
 
