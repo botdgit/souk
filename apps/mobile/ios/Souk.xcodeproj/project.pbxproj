@@ -308,6 +308,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "ae.souk.app";
 				PRODUCT_NAME = "Souk";
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -335,6 +336,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "ae.souk.app";
 				PRODUCT_NAME = "Souk";
+				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
 				TARGETED_DEVICE_FAMILY = "1";
