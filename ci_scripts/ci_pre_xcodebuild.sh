@@ -64,6 +64,7 @@ xcodebuild build \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
   SKIP_INSTALL=YES \
+  SKIP_BUNDLING=1 \
   SYMROOT="${ARCHIVE_SYMROOT}" \
   OBJROOT="${ARCHIVE_OBJROOT}" \
   || echo "WARNING: pre-build did not complete cleanly; pod targets should have built, proceeding to archive"

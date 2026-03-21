@@ -23,24 +23,8 @@ fi
 
 echo "yarn: $(yarn --version)"
 
-# Write .xcode.env.local so that Xcode script phases can find node and the
-# correct project root even when Xcode Cloud does not inherit Homebrew PATH.
-#
-# NODE_BINARY: needed by "Bundle React Native code and images" and
-#   with-node.sh because Xcode's script-phase PATH omits Homebrew.
-#
-# PROJECT_ROOT: souk.xcodeproj is a symlink at the repo root, so Xcode
-#   sets PROJECT_DIR to the repo root and the script computes
-#   PROJECT_ROOT="$PROJECT_DIR/.." (parent of repo – wrong).
-#   The bundle script sources .xcode.env.local a SECOND TIME after
-#   setting PROJECT_ROOT, so we can override it here.
 NODE_ABS="$(command -v node)"
 XCODE_ENV_LOCAL="$CI_PRIMARY_REPOSITORY_PATH/apps/mobile/ios/.xcode.env.local"
-{
-  echo "export NODE_BINARY=${NODE_ABS}"
-  echo "export PROJECT_ROOT=${CI_PRIMARY_REPOSITORY_PATH}/apps/mobile"
-} > "$XCODE_ENV_LOCAL"
-echo "Wrote .xcode.env.local: NODE_BINARY=${NODE_ABS}, PROJECT_ROOT=${CI_PRIMARY_REPOSITORY_PATH}/apps/mobile"
 
 echo "=== ci_post_clone: installing JS dependencies ==="
 
@@ -48,6 +32,41 @@ echo "=== ci_post_clone: installing JS dependencies ==="
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 
 yarn install --frozen-lockfile
+
+# Write .xcode.env.local after yarn install so node_modules are available for
+# resolving ENTRY_FILE and CLI_PATH.
+#
+# NODE_BINARY: needed by "Bundle React Native code and images" because Xcode's
+#   script-phase PATH omits Homebrew.
+#
+# PROJECT_ROOT: souk.xcodeproj is a symlink; Xcode sets PROJECT_DIR to the
+#   symlink parent (repo root) and the bundle script computes
+#   PROJECT_ROOT="$PROJECT_DIR/.." (parent of repo – wrong). We override it
+#   here. The bundle script sources .xcode.env.local TWICE; the second
+#   sourcing (after the bad override) also corrects PROJECT_ROOT.
+#
+# ENTRY_FILE / CLI_PATH: the bundle script resolves these between the two
+#   .xcode.env.local sourcings using the wrong PROJECT_ROOT. Pre-setting them
+#   here causes the "if [[ -z "$ENTRY_FILE" ]]" guard to skip re-resolution.
+ENTRY_FILE_ABS="$(node -e "require('expo/scripts/resolveAppEntry')" \
+  "${CI_PRIMARY_REPOSITORY_PATH}/apps/mobile" ios absolute 2>/dev/null | tail -n 1)"
+if [ -z "$ENTRY_FILE_ABS" ]; then
+  ENTRY_FILE_ABS="${CI_PRIMARY_REPOSITORY_PATH}/node_modules/expo-router/entry.js"
+fi
+CLI_PATH_ABS="$(node --print \
+  "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })" \
+  2>/dev/null)"
+{
+  echo "export NODE_BINARY=${NODE_ABS}"
+  echo "export PROJECT_ROOT=${CI_PRIMARY_REPOSITORY_PATH}/apps/mobile"
+  echo "export ENTRY_FILE=${ENTRY_FILE_ABS}"
+  echo "export CLI_PATH=${CLI_PATH_ABS}"
+} > "$XCODE_ENV_LOCAL"
+echo "Wrote .xcode.env.local:"
+echo "  NODE_BINARY=${NODE_ABS}"
+echo "  PROJECT_ROOT=${CI_PRIMARY_REPOSITORY_PATH}/apps/mobile"
+echo "  ENTRY_FILE=${ENTRY_FILE_ABS}"
+echo "  CLI_PATH=${CLI_PATH_ABS}"
 
 echo "=== ci_post_clone: running pod install ==="
 
