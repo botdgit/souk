@@ -133,17 +133,17 @@ export default function ProfileScreen() {
         <ProfileMenuItem
           icon="map-outline"
           label="Souk Points"
-          onPress={() => {}}
+          onPress={() => router.push('/souk-points')}
         />
         <ProfileMenuItem
           icon="settings-outline"
           label="Settings"
-          onPress={() => {}}
+          onPress={() => router.push('/settings')}
         />
         <ProfileMenuItem
           icon="help-circle-outline"
           label="Help & Support"
-          onPress={() => {}}
+          onPress={() => router.push('/help')}
         />
       </View>
 

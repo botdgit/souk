@@ -107,6 +107,9 @@ router.post('/:id/confirm-delivery', requireAuth, async (req: AuthRequest, res: 
   if (!['paid', 'shipped', 'delivered'].includes(order.status)) {
     return res.status(400).json({ error: 'Order cannot be confirmed in current state' })
   }
+  if (!order.seller?.stripe_account_id) {
+    return res.status(400).json({ error: 'Seller payment account not available' })
+  }
 
   // Release funds to seller via transfer
   let transfer

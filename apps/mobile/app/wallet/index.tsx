@@ -17,12 +17,12 @@ import { useOrders } from '@/features/orders/hooks'
 import { useConfirmDelivery } from '@/features/orders/hooks'
 import { useAuthStore } from '@/stores/authStore'
 
-const TYPE_ICONS = {
+const TYPE_ICONS: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
   sale: 'arrow-down-circle',
   purchase: 'arrow-up-circle',
-  payout: 'banknote',
+  payout: 'wallet-outline',
   refund: 'refresh-circle',
-} as const
+}
 
 const STATUS_COLORS = {
   pending: '#8A8A8A',
@@ -37,7 +37,7 @@ function TransactionRow({ txn }: { txn: Transaction }) {
   return (
     <View className="flex-row items-center px-4 py-3 border-b border-souk-charcoal">
       <Ionicons
-        name={TYPE_ICONS[txn.type] as any}
+        name={TYPE_ICONS[txn.type] ?? 'ellipse-outline'}
         size={22}
         color={isCredit ? '#38A169' : '#8A8A8A'}
         style={{ marginRight: 12 }}

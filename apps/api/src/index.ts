@@ -22,7 +22,7 @@ app.use('/stripe/webhook', express.raw({ type: 'application/json' }), webhookRou
 
 app.use(helmet())
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
+  origin: process.env.CORS_ORIGIN || (process.env.NODE_ENV === 'production' ? 'https://souk.ae' : '*'),
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
 }))
 app.use(express.json({ limit: '10mb' }))

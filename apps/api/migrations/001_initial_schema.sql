@@ -138,9 +138,9 @@ INSERT INTO meetup_points (name, address, latitude, longitude, area, verified) V
 
 CREATE TABLE orders (
   id                          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  listing_id                  UUID NOT NULL REFERENCES listings(id),
-  buyer_id                    UUID NOT NULL REFERENCES users(id),
-  seller_id                   UUID NOT NULL REFERENCES users(id),
+  listing_id                  UUID NOT NULL REFERENCES listings(id) ON DELETE RESTRICT,
+  buyer_id                    UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  seller_id                   UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   amount_aed                  INTEGER NOT NULL,
   service_fee_aed             INTEGER NOT NULL,
   delivery_fee_aed            INTEGER NOT NULL DEFAULT 0,
@@ -149,7 +149,7 @@ CREATE TABLE orders (
   stripe_transfer_id          TEXT,
   status                      order_status NOT NULL DEFAULT 'pending_payment',
   delivery_method             delivery_method NOT NULL,
-  meetup_point_id             UUID REFERENCES meetup_points(id),
+  meetup_point_id             UUID REFERENCES meetup_points(id) ON DELETE SET NULL,
   delivery_confirmed_at       TIMESTAMPTZ,
   payout_released_at          TIMESTAMPTZ,
   created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -207,7 +207,7 @@ CREATE TABLE messages (
   body            TEXT,
   image_url       TEXT,
   type            message_type NOT NULL DEFAULT 'text',
-  offer_id        UUID REFERENCES offers(id),
+  offer_id        UUID REFERENCES offers(id) ON DELETE SET NULL,
   read_at         TIMESTAMPTZ,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (body IS NOT NULL OR image_url IS NOT NULL)
@@ -270,7 +270,7 @@ CREATE INDEX idx_follows_following_id ON follows(following_id);
 CREATE TABLE transactions (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id           UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  order_id          UUID REFERENCES orders(id),
+  order_id          UUID REFERENCES orders(id) ON DELETE SET NULL,
   type              transaction_type NOT NULL,
   amount_aed        INTEGER NOT NULL,
   stripe_reference  TEXT,

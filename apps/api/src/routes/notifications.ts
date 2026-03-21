@@ -25,22 +25,26 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 // POST /notifications/read-all
 router.post('/read-all', requireAuth, async (req: AuthRequest, res: Response) => {
-  await supabase
+  const { error } = await supabase
     .from('notifications')
     .update({ read_at: new Date().toISOString() })
     .eq('user_id', req.userId)
     .is('read_at', null)
+
+  if (error) return res.status(500).json({ error: 'Failed to mark notifications as read' })
 
   return res.json({ message: 'All notifications marked as read' })
 })
 
 // PATCH /notifications/:id/read
 router.patch('/:id/read', requireAuth, async (req: AuthRequest, res: Response) => {
-  await supabase
+  const { error } = await supabase
     .from('notifications')
     .update({ read_at: new Date().toISOString() })
     .eq('id', req.params.id)
     .eq('user_id', req.userId)
+
+  if (error) return res.status(500).json({ error: 'Failed to mark notification as read' })
 
   return res.json({ message: 'Notification marked as read' })
 })

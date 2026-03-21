@@ -1,11 +1,22 @@
 import { v4 as uuidv4 } from 'uuid'
 import crypto from 'crypto'
 
-const R2_ENDPOINT = process.env.CLOUDFLARE_R2_ENDPOINT || ''
-const R2_ACCESS_KEY = process.env.CLOUDFLARE_R2_ACCESS_KEY || ''
-const R2_SECRET_KEY = process.env.CLOUDFLARE_R2_SECRET_KEY || ''
-const R2_BUCKET = process.env.CLOUDFLARE_R2_BUCKET || 'souk-media'
-const R2_PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL || ''
+function requireEnv(name: string): string {
+  const val = process.env[name]
+  if (!val) throw new Error(`Missing required environment variable: ${name}`)
+  return val
+}
+
+// Lazy-load R2 config to allow startup without R2 in dev mode
+function getR2Config() {
+  return {
+    endpoint: requireEnv('CLOUDFLARE_R2_ENDPOINT'),
+    accessKey: requireEnv('CLOUDFLARE_R2_ACCESS_KEY'),
+    secretKey: requireEnv('CLOUDFLARE_R2_SECRET_KEY'),
+    bucket: process.env.CLOUDFLARE_R2_BUCKET || 'souk-media',
+    publicUrl: requireEnv('CLOUDFLARE_R2_PUBLIC_URL'),
+  }
+}
 
 function hmacSha256(key: Buffer | string, data: string): Buffer {
   return crypto.createHmac('sha256', key).update(data).digest()
@@ -25,15 +36,16 @@ export async function generatePresignedUrl(
   contentType: string,
   expiresIn = 900
 ): Promise<string> {
+  const config = getR2Config()
   const now = new Date()
   const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '')
   const datetimeStr = now.toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0, 15) + 'Z'
 
   const region = 'auto'
   const service = 's3'
-  const host = new URL(R2_ENDPOINT).host
+  const host = new URL(config.endpoint).host
   const credentialScope = `${dateStr}/${region}/${service}/aws4_request`
-  const credential = `${R2_ACCESS_KEY}/${credentialScope}`
+  const credential = `${config.accessKey}/${credentialScope}`
 
   const queryParams = new URLSearchParams({
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
@@ -63,7 +75,7 @@ export async function generatePresignedUrl(
   const signingKey = hmacSha256(
     hmacSha256(
       hmacSha256(
-        hmacSha256(`AWS4${R2_SECRET_KEY}`, dateStr),
+        hmacSha256(`AWS4${config.secretKey}`, dateStr),
         region
       ),
       service
@@ -78,9 +90,10 @@ export async function generatePresignedUrl(
 
   queryParams.set('X-Amz-Signature', signature)
 
-  return `${R2_ENDPOINT}/${R2_BUCKET}/${key}?${queryParams.toString()}`
+  return `${config.endpoint}/${config.bucket}/${key}?${queryParams.toString()}`
 }
 
 export function getPublicUrl(key: string): string {
-  return `${R2_PUBLIC_URL}/${key}`
+  const config = getR2Config()
+  return `${config.publicUrl}/${key}`
 }
