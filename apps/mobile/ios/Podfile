@@ -82,6 +82,20 @@ target 'Souk' do
           config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = min_target
         end
       end
+
+      # Xcode Cloud archive builds use a restricted PATH that excludes Homebrew.
+      # Pod script phases that invoke `node` (e.g. expo-constants' app.config
+      # generator) will fail with "command not found: node" unless Homebrew is
+      # in PATH. Phases without output files are marked alwaysOutOfDate and
+      # re-run on every build — including the archive — so the pre-build step
+      # in ci_pre_xcodebuild.sh cannot cache them away.
+      # Fix: prepend Homebrew paths at the top of every pod shell-script phase.
+      homebrew_path_prefix = 'export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:$PATH"'
+      target.build_phases.each do |phase|
+        next unless phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase)
+        next if phase.shell_script.include?('/opt/homebrew/bin')
+        phase.shell_script = "#{homebrew_path_prefix}\n#{phase.shell_script}"
+      end
     end
 
     # expo-camera@15.x (SDK 51 era) references EXBarCodeScannerInterface and
