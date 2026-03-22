@@ -109,4 +109,15 @@ ln -sfn "$IOS_DIR/Souk"  "$REPO_ROOT/Souk"
 echo "  Pods  -> $IOS_DIR/Pods"
 echo "  Souk  -> $IOS_DIR/Souk"
 
+# The "Bundle React Native code and images" build phase sources:
+#   $PODS_ROOT/../.xcode.env        (for NODE_BINARY)
+#   $PODS_ROOT/../.xcode.env.local  (for NODE_BINARY, PROJECT_ROOT, ENTRY_FILE, CLI_PATH)
+# When building from souk.xcodeproj at the repo root, PODS_ROOT resolves to
+# $REPO_ROOT/Pods (the symlink above), so $PODS_ROOT/.. is the repo root itself.
+# The actual files live in apps/mobile/ios/, so create symlinks at the repo root.
+ln -sfn "$IOS_DIR/.xcode.env"   "$REPO_ROOT/.xcode.env"
+ln -sfn "$XCODE_ENV_LOCAL"      "$REPO_ROOT/.xcode.env.local"
+echo "  .xcode.env       -> $IOS_DIR/.xcode.env"
+echo "  .xcode.env.local -> $XCODE_ENV_LOCAL"
+
 echo "=== ci_post_clone: done ==="
