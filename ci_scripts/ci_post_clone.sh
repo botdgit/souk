@@ -104,10 +104,15 @@ echo "=== ci_post_clone: creating root-level symlinks for souk.xcodeproj ==="
 REPO_ROOT="$CI_PRIMARY_REPOSITORY_PATH"
 IOS_DIR="$REPO_ROOT/apps/mobile/ios"
 
-ln -sfn "$IOS_DIR/Pods"  "$REPO_ROOT/Pods"
-ln -sfn "$IOS_DIR/Souk"  "$REPO_ROOT/Souk"
-echo "  Pods  -> $IOS_DIR/Pods"
-echo "  Souk  -> $IOS_DIR/Souk"
+ln -sfn "$IOS_DIR/Pods"        "$REPO_ROOT/Pods"
+ln -sfn "$IOS_DIR/Souk"        "$REPO_ROOT/Souk"
+# [CP] Check Pods Manifest.lock uses ${PODS_PODFILE_DIR_PATH}/Podfile.lock.
+# PODS_PODFILE_DIR_PATH = ${SRCROOT}/. and SRCROOT = repo root when building
+# from souk.xcodeproj, so the check looks for Podfile.lock at the repo root.
+ln -sfn "$IOS_DIR/Podfile.lock" "$REPO_ROOT/Podfile.lock"
+echo "  Pods        -> $IOS_DIR/Pods"
+echo "  Souk        -> $IOS_DIR/Souk"
+echo "  Podfile.lock -> $IOS_DIR/Podfile.lock"
 
 # The "Bundle React Native code and images" build phase sources .xcode.env and
 # .xcode.env.local relative to $PODS_ROOT/.. When building from souk.xcodeproj
