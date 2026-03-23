@@ -31,7 +31,21 @@ echo "=== ci_post_clone: installing JS dependencies ==="
 # Xcode Cloud checks out into CI_PRIMARY_REPOSITORY_PATH.
 cd "$CI_PRIMARY_REPOSITORY_PATH"
 
-yarn install --frozen-lockfile
+YARN_ATTEMPT=1
+YARN_BACKOFF=2
+while true; do
+  if yarn install --frozen-lockfile --network-timeout 300000; then
+    break
+  fi
+  if [ "$YARN_ATTEMPT" -ge 4 ]; then
+    echo "yarn install failed after $YARN_ATTEMPT attempts" >&2
+    exit 1
+  fi
+  echo "yarn install failed (attempt $YARN_ATTEMPT) – retrying in ${YARN_BACKOFF}s..."
+  sleep "$YARN_BACKOFF"
+  YARN_ATTEMPT=$((YARN_ATTEMPT + 1))
+  YARN_BACKOFF=$((YARN_BACKOFF * 2))
+done
 
 # Write .xcode.env.local after yarn install so node_modules are available for
 # resolving ENTRY_FILE and CLI_PATH.
