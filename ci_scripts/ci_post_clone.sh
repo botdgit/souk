@@ -5,11 +5,26 @@ set -e
 # Add Homebrew paths for both Apple Silicon (/opt/homebrew) and Intel (/usr/local).
 export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:$PATH"
 
+# Prevent Homebrew from running a self-update before every operation.
+# Without these, each brew call triggers a network fetch of the formula list,
+# which adds minutes to the build and can fail due to transient DNS issues.
+export HOMEBREW_NO_AUTO_UPDATE=1
+export HOMEBREW_NO_INSTALL_CLEANUP=1
+
 echo "=== ci_post_clone: ensuring Node.js is available ==="
 
-if ! command -v node >/dev/null 2>&1; then
-  echo "Node not found – installing via Homebrew"
-  brew install node
+# Pin to Node.js 20 (LTS). Using a specific major version avoids silent
+# incompatibilities when Homebrew installs a newer major version on a fresh
+# runner agent.
+REQUIRED_NODE_MAJOR=20
+_current_major=0
+if command -v node >/dev/null 2>&1; then
+  _current_major="$(node -e 'process.stdout.write(process.version.split(".")[0].slice(1))')"
+fi
+if [ "$_current_major" -lt "$REQUIRED_NODE_MAJOR" ] 2>/dev/null; then
+  echo "Node ${_current_major} found; installing node@${REQUIRED_NODE_MAJOR} via Homebrew"
+  brew install "node@${REQUIRED_NODE_MAJOR}"
+  brew link --force --overwrite "node@${REQUIRED_NODE_MAJOR}"
 fi
 
 echo "Node: $(node --version)"
@@ -63,13 +78,26 @@ done
 #   .xcode.env.local sourcings using the wrong PROJECT_ROOT. Pre-setting them
 #   here causes the "if [[ -z "$ENTRY_FILE" ]]" guard to skip re-resolution.
 ENTRY_FILE_ABS="$(node -e "require('expo/scripts/resolveAppEntry')" \
-  "${CI_PRIMARY_REPOSITORY_PATH}/apps/mobile" ios absolute 2>/dev/null | tail -n 1)"
+  "${CI_PRIMARY_REPOSITORY_PATH}/apps/mobile" ios absolute 2>&1 | tail -n 1)"
 if [ -z "$ENTRY_FILE_ABS" ]; then
   ENTRY_FILE_ABS="${CI_PRIMARY_REPOSITORY_PATH}/node_modules/expo-router/entry.js"
 fi
+if [ ! -f "$ENTRY_FILE_ABS" ]; then
+  echo "ERROR: ENTRY_FILE does not exist: ${ENTRY_FILE_ABS}" >&2
+  exit 1
+fi
+
 CLI_PATH_ABS="$(node --print \
-  "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })" \
-  2>/dev/null)"
+  "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })")"
+if [ -z "$CLI_PATH_ABS" ]; then
+  echo "ERROR: could not resolve @expo/cli path" >&2
+  exit 1
+fi
+if [ ! -f "$CLI_PATH_ABS" ]; then
+  echo "ERROR: CLI_PATH does not exist: ${CLI_PATH_ABS}" >&2
+  exit 1
+fi
+
 {
   echo "export NODE_BINARY=${NODE_ABS}"
   echo "export PROJECT_ROOT=${CI_PRIMARY_REPOSITORY_PATH}/apps/mobile"
